@@ -1,7 +1,8 @@
 # Gcc Arm To Zig
 
-Gcc Arm to Zig, or `gatz`, is both a command line program and a zig module that provides utilities for porting projects using the `gcc-arm-none-eabi` compiler to Zig. It is intended to be used with freestanding Arm Cortex-M targets (micro-controllers). 
+Gcc Arm to Zig, or `gatz`, is both a command line program and a zig module that provides utilities for porting projects using the `gcc-arm-none-eabi` compiler to Zig. It is intended to be used with freestanding Arm Cortex-M targets (micro-controllers). Currently only Cortex-M targets are supported, however this could be expanded in the future if there's demand for it. 
 
+Once mature enough, this project will have releases corresponding to Zig releases. For now, this tracks Zig version `0.13.0`. 
 # Installing
 
 Add `gatz` as a dependency to `build.zig.zon` like so:
@@ -62,7 +63,7 @@ See `gatz -h` for full documentation.
 
 ## Build Utilities
 
-`gatz` provides utilities for use in a `build.zig` file that make things like target selection and linking in `arm-none-eabi-gcc`'s Newlib libc much easier than in vanilla Zig. See the [build.zig for an example project using `gatz`](example/build.zig) for a more detailed walkthrough;
+`gatz` provides utilities for use in a `build.zig` file that make things like target selection and linking in `arm-none-eabi-gcc`'s pre-compiled Newlib libc much easier than in vanilla Zig. See the [build.zig for an example project using `gatz`](example/build.zig) for a more detailed walkthrough.
 
 ## Contributing
 Github issues for feature requests/bugs are welcome! PR's are also welcome!

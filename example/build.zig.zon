@@ -6,7 +6,7 @@
     .dependencies = .{
         .gatz = .{
             // Normally this would be:
-            //
+            // .url = "git+https://github.com/haydenridd/gcc-arm-to-zig"
             .path = "../",
         },
     },
