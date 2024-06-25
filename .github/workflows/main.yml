@@ -15,7 +15,11 @@ jobs:
       - uses: mlugg/setup-zig@v1
         with:
           version: 0.13.0
-      - run: zig build test -Doptimize=${{ matrix.optimize }}
+      - name: Zig Tests
+        run: zig build test -Doptimize=${{ matrix.optimize }}
+      - name: Build Example
+        working-directory: ./example
+        run: zig build -Dtarget=thumb-freestanding-eabihf -Dcpu=cortex_m7+fp_armv8d16sp -Doptimize=${{ matrix.optimize }}
   lint:
     runs-on: ubuntu-latest
     steps:
