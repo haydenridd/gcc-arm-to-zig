@@ -152,15 +152,6 @@ test "Cpu from Zig Target" {
     }
 }
 
-// fn enumFieldName(T: type, enum_val: T) []const u8 {
-//     inline for (std.meta.fields(T)) |enum_field| {
-//         if (enum_field.value == @intFromEnum(enum_val)) {
-//             return enum_field.name;
-//         }
-//     }
-//     unreachable;
-// }
-
 /// Corresponds to valid options for "-mcpu=" flag and maps to Zig equivalent target CPU + acceptable FPU flags
 pub const cpu = struct {
     const ArmCpu = std.Target.arm.cpu;

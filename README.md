@@ -68,7 +68,6 @@ See `gatz -h` for full documentation.
 Github issues for feature requests/bugs are welcome! PR's are also welcome!
 
 ## TODO:
-- Add CI flow to run existing Zig tests
 - Add some dummy assembly files that excercise instructions for each possible target combo (fpu, endianness, etc.) + ensure that each target configuration can compile said assembly code
     - Add this to CI
 - Expansion beyond Cortex-M targets if enough interest
