@@ -15,6 +15,10 @@ jobs:
       - uses: mlugg/setup-zig@v1
         with:
           version: 0.13.0
+      - name: Install Arm GNU Toolchain (arm-none-eabi-gcc)
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: '13.2.Rel1'
       - name: Zig Tests
         run: zig build test -Doptimize=${{ matrix.optimize }}
       - name: Build Example
