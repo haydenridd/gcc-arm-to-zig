@@ -31,10 +31,12 @@ fn showHelp() anyerror!void {
     try stdout_buffered.flush();
 }
 
+/// Check that the Zig target is supported by gatz
 pub fn checkCompatibility(zig_target: std.Target) errors.ConversionError!void {
     _ = try Cpu.fromZigTarget(zig_target);
 }
 
+/// Utility for checking if a provided Zig target is within a slice of possible GCC targets
 pub fn targetWithin(zig_target: std.Target, gatz_targets: []const Target) bool {
     const gatz_match = Target.fromZigTarget(zig_target) catch return false;
     for (gatz_targets) |gatz_target| {

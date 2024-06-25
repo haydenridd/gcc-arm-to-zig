@@ -238,5 +238,5 @@ pub const FloatAbi = enum { hard, soft, softfp };
 /// Corresponds to whether "arm" or "thumb" instruction set is used, specified with "-mthumb" or "-marm" flags, but not both!
 pub const InstructionSet = enum { thumb, arm };
 
-/// Corresponds endianness specified with "-mlittle-endian" or "-mbig-endian" flags, but not both!
+/// Corresponds to endianness specified with "-mlittle-endian" or "-mbig-endian" flags, but not both!
 pub const Endianness = enum { little, big };

@@ -5,12 +5,21 @@ const errors = @import("errors.zig");
 const ConversionError = errors.ConversionError;
 const FlagTranslationError = errors.FlagTranslationError;
 
+/// Represents an arm GCC target using fields familiar to those using arm-none-eabi-gcc to compile projects.
 pub const Target = struct {
+    /// Corresponds to -mcpu flag, select using cpu.[flag_value]
     cpu: gcc.Cpu,
+
+    /// Set to .thumb if using -mthumb, or to .arm if using -marm
     instruction_set: gcc.InstructionSet = .thumb,
+
+    /// Set to .little if using -mlittle-endian (default) or .big if using -mbig-endian
     endianness: gcc.Endianness = .little,
+
+    /// Corresponds to -mfloat-abi flag
     float_abi: gcc.FloatAbi = .soft,
-    /// Not neccessary when using "soft" float_abi
+
+    /// Not neccessary when using "soft" float_abi, corresponds to -mfpu flag
     fpu: ?gcc.Fpu = null,
 
     fn toArmFeatureSet(self: Target) ConversionError!std.Target.Cpu.Feature.Set {
@@ -45,6 +54,7 @@ pub const Target = struct {
         }
     }
 
+    /// Produces a target query for use with b.resolveTargetQuery()
     pub fn toTargetQuery(self: Target) ConversionError!std.Target.Query {
         try self.validateFpuSettings();
 
@@ -61,6 +71,7 @@ pub const Target = struct {
         };
     }
 
+    /// Create directly from flag string values
     pub fn fromFlags(mcpu: ?[]const u8, mfloat_abi: ?[]const u8, mfpu: ?[]const u8, mthumb: bool, marm: bool) !Target {
         const mcpu_str =
             if (mcpu) |v| v else return FlagTranslationError.MissingCpu;
@@ -100,6 +111,7 @@ pub const Target = struct {
         };
     }
 
+    /// Given a Zig target, produce the corresponding "GCC target", or error if no matching one is found
     pub fn fromZigTarget(target: std.Target) ConversionError!Target {
         const cpu = try gcc.Cpu.fromZigTarget(target);
         const instruction_set: gcc.InstructionSet = switch (target.cpu.arch) {
