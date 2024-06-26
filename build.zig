@@ -53,12 +53,29 @@ pub fn linkNewlib(b: *std.Build, target: std.Build.ResolvedTarget, exe: *std.Bui
     exe.linkSystemLibrary("c_nano");
     exe.linkSystemLibrary("m");
 
-    // // Manually include C runtime objects bundled with arm-none-eabi-gcc
+    // Manually include C runtime objects bundled with arm-none-eabi-gcc
     exe.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crt0.o", .{gcc_arm_lib_path2}) });
     exe.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crti.o", .{gcc_arm_lib_path1}) });
     exe.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crtbegin.o", .{gcc_arm_lib_path1}) });
     exe.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crtend.o", .{gcc_arm_lib_path1}) });
     exe.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crtn.o", .{gcc_arm_lib_path1}) });
+}
+
+/// Similar to linkNewlib(), but just includes the system include directories for newlib.
+///
+/// While easier, this is still a somewhat ugly way to do this...
+///
+pub fn includeNewlibHeaders(b: *std.Build, exe: *std.Build.Step.Compile) NewlibError!void {
+
+    // Try to find arm-none-eabi-gcc program at a user specified path, or PATH variable if none provided
+    const arm_gcc_pgm = if (b.option([]const u8, "armgcc", "Path to arm-none-eabi-gcc compiler")) |arm_gcc_path|
+        b.findProgram(&.{"arm-none-eabi-gcc"}, &.{arm_gcc_path}) catch return NewlibError.CompilerNotFound
+    else
+        b.findProgram(&.{"arm-none-eabi-gcc"}, &.{}) catch return NewlibError.CompilerNotFound;
+
+    //  Use gcc-arm-none-eabi to figure out where library paths are
+    const gcc_arm_sysroot_path = std.mem.trim(u8, b.run(&.{ arm_gcc_pgm, "-print-sysroot" }), "\r\n");
+    exe.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/include", .{gcc_arm_sysroot_path}) });
 }
 
 pub fn build(b: *std.Build) void {
