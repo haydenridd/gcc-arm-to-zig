@@ -6,12 +6,8 @@ Once mature enough, this project will have releases corresponding to Zig release
 # Installing as a Module
 
 Add `gatz` as a dependency to `build.zig.zon` like so:
-``` zon
-.dependencies = .{
-    .gatz = .{
-        .url = "git+https://github.com/haydenridd/gcc-arm-to-zig"
-    },
-},
+```
+zig fetch --save git+https://github.com/haydenridd/gcc-arm-to-zig
 ```
 
 For using the build utilities provided in `build.zig` you can now add:
