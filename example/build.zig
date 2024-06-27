@@ -1,6 +1,6 @@
 const std = @import("std");
 const gatz = @import("gatz");
-const NewlibError = gatz.NewlibError;
+const NewlibError = gatz.newlib.Error;
 pub fn build(b: *std.Build) void {
 
     // Allowing the user to pass whatever target they want is fine, since gatz.checkCompatibility() can be
@@ -52,7 +52,7 @@ pub fn build(b: *std.Build) void {
     // Linking in the arm-none-eabi-gcc supplied newlib is now a single function call!
     // Automatically grabs the correct pre-built libraries based on target. Will also
     // check to make sure a compatible target is being used
-    gatz.linkNewlib(b, target, blinky_exe) catch |err| switch (err) {
+    gatz.newlib.addTo(b, target, blinky_exe) catch |err| switch (err) {
         NewlibError.CompilerNotFound => {
             std.log.err("Couldn't find arm-none-eabi-gcc compiler!\n", .{});
             unreachable;
