@@ -63,16 +63,16 @@ pub const fpu = struct {
     pub const @"fpv4-sp-d16": Fpu = .{ .name = "fpv4-sp-d16", .priority = 4, .zig_features = &.{ArmFeature.vfp4d16sp} };
 
     pub const @"neon-vfpv3": Fpu = .{ .name = "neon-vfpv3", .priority = 5, .zig_features = &.{ ArmFeature.neon, ArmFeature.vfp3 } };
-    pub const neon = .{ .name = "neon", .priority = 5, .zig_features = @"neon-vfpv3".zig_features }; // Alias for neon-vfpv3
+    pub const neon: Fpu = .{ .name = "neon", .priority = 5, .zig_features = @"neon-vfpv3".zig_features }; // Alias for neon-vfpv3
 
     pub const vfp3: Fpu = .{ .name = "vfp3", .priority = 6, .zig_features = &.{ArmFeature.vfp3} };
-    pub const vfpv3 = .{ .name = "vfpv3", .priority = 6, .zig_features = vfp3.zig_features }; // Alias for vfp3
+    pub const vfpv3: Fpu = .{ .name = "vfpv3", .priority = 6, .zig_features = vfp3.zig_features }; // Alias for vfp3
     pub const @"vfpv3-d16": Fpu = .{ .name = "vfpv3-d16", .priority = 6, .zig_features = &.{ArmFeature.vfp3d16} };
     pub const @"vfpv3-d16-fp16": Fpu = .{ .name = "vfpv3-d16-fp16", .priority = 6, .zig_features = &.{ArmFeature.vfp3d16sp} };
     pub const @"vfpv3-fp16": Fpu = .{ .name = "vfpv3-fp16", .priority = 6, .zig_features = &.{ArmFeature.vfp3sp} };
 
     pub const vfpv2: Fpu = .{ .name = "vfpv2", .priority = 7, .zig_features = &.{ArmFeature.vfp2} };
-    pub const vfp = .{ .name = "vfp", .priority = 8, .zig_features = vfpv2.zig_features }; // Alias for vfpv2
+    pub const vfp: Fpu = .{ .name = "vfp", .priority = 8, .zig_features = vfpv2.zig_features }; // Alias for vfpv2
 };
 
 const ZigCpuModel = std.Target.Cpu.Model;
@@ -134,7 +134,7 @@ test "Cpu from Zig Target" {
         .cpu_arch = .thumb,
         .os_tag = .freestanding,
         .abi = .eabihf,
-        .cpu_model = std.zig.CrossTarget.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m7 },
+        .cpu_model = std.Target.Query.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m7 },
     };
 
     // Extremely contrived, but fun way to test that all CPUs supported can be converted from a Zig target :)
@@ -143,7 +143,7 @@ test "Cpu from Zig Target" {
         inline for (@typeInfo(std.Target.arm.cpu).@"struct".decls) |zig_decl| {
             if (@field(std.Target.arm.cpu, zig_decl.name).llvm_name) |llvm_name| {
                 if (std.mem.eql(u8, decl.name, llvm_name)) {
-                    query.cpu_model = std.zig.CrossTarget.CpuModel{ .explicit = &@field(std.Target.arm.cpu, zig_decl.name) };
+                    query.cpu_model = std.Target.Query.CpuModel{ .explicit = &@field(std.Target.arm.cpu, zig_decl.name) };
                     const target = try std.zig.system.resolveTargetQuery(query);
                     try std.testing.expectEqualDeep(@field(cpu, decl.name), Cpu.fromZigTarget(target));
                 }
