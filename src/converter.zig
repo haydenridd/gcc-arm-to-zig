@@ -127,7 +127,7 @@ pub const Target = struct {
 
         // Iterate through all FPUs, if it contains all required feautures, pick that one
         var fpu: ?gcc.Fpu = null;
-        inline for (@typeInfo(gcc.fpu).Struct.decls) |decl| {
+        inline for (@typeInfo(gcc.fpu).@"struct".decls) |decl| {
             var valid = true;
             for (@field(gcc.fpu, decl.name).zig_features) |feature| {
                 if (!std.Target.arm.featureSetHas(target.cpu.features, feature)) {

@@ -242,7 +242,7 @@ fn cmdInfo(
     if (cpu_maybe) |cpu_val| {
         try cpu_val.printInfo(stdout);
     } else {
-        inline for (@typeInfo(cpu).Struct.decls) |decl| {
+        inline for (@typeInfo(cpu).@"struct".decls) |decl| {
             try @field(cpu, decl.name).printInfo(stdout);
         }
     }

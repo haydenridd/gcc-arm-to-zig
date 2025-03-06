@@ -11,7 +11,7 @@ pub const Fpu = struct {
     priority: u8,
     zig_features: []const std.Target.arm.Feature,
     pub fn fromString(str: []const u8) !Fpu {
-        inline for (@typeInfo(fpu).Struct.decls) |decl| {
+        inline for (@typeInfo(fpu).@"struct".decls) |decl| {
             if (std.mem.eql(u8, str, decl.name)) {
                 return @field(fpu, decl.name);
             }
@@ -83,7 +83,7 @@ pub const Cpu = struct {
     compatible_fpus: []const Fpu = &.{},
 
     pub fn fromString(mcpu: []const u8) FlagTranslationError!Cpu {
-        inline for (@typeInfo(cpu).Struct.decls) |decl| {
+        inline for (@typeInfo(cpu).@"struct".decls) |decl| {
             if (std.mem.eql(u8, mcpu, decl.name)) {
                 return @field(cpu, decl.name);
             }
@@ -139,8 +139,8 @@ test "Cpu from Zig Target" {
 
     // Extremely contrived, but fun way to test that all CPUs supported can be converted from a Zig target :)
     // Potentially useful in the future if we end up checking more than cpu arch + llvm_name
-    inline for (@typeInfo(cpu).Struct.decls) |decl| {
-        inline for (@typeInfo(std.Target.arm.cpu).Struct.decls) |zig_decl| {
+    inline for (@typeInfo(cpu).@"struct".decls) |decl| {
+        inline for (@typeInfo(std.Target.arm.cpu).@"struct".decls) |zig_decl| {
             if (@field(std.Target.arm.cpu, zig_decl.name).llvm_name) |llvm_name| {
                 if (std.mem.eql(u8, decl.name, llvm_name)) {
                     query.cpu_model = std.zig.CrossTarget.CpuModel{ .explicit = &@field(std.Target.arm.cpu, zig_decl.name) };
