@@ -66,7 +66,7 @@ pub const Target = struct {
             .cpu_arch = cpu_arch,
             .os_tag = .freestanding,
             .abi = if (self.float_abi == .soft) .eabi else .eabihf,
-            .cpu_model = std.zig.CrossTarget.CpuModel{ .explicit = self.cpu.zig_cpu_model },
+            .cpu_model = std.Target.Query.CpuModel{ .explicit = self.cpu.zig_cpu_model },
             .cpu_features_add = try self.toArmFeatureSet(),
         };
     }
@@ -127,7 +127,7 @@ pub const Target = struct {
 
         // Iterate through all FPUs, if it contains all required feautures, pick that one
         var fpu: ?gcc.Fpu = null;
-        inline for (@typeInfo(gcc.fpu).Struct.decls) |decl| {
+        inline for (@typeInfo(gcc.fpu).@"struct".decls) |decl| {
             var valid = true;
             for (@field(gcc.fpu, decl.name).zig_features) |feature| {
                 if (!std.Target.arm.featureSetHas(target.cpu.features, feature)) {
@@ -201,7 +201,7 @@ test "Target Conversion" {
             .cpu_arch = .thumb,
             .os_tag = .freestanding,
             .abi = .eabihf,
-            .cpu_model = std.zig.CrossTarget.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m7 },
+            .cpu_model = std.Target.Query.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m7 },
             .cpu_features_add = std.Target.arm.featureSet(&[_]std.Target.arm.Feature{std.Target.arm.Feature.fp_armv8d16sp}),
         }),
     ));
@@ -217,7 +217,7 @@ test "Target Conversion" {
             .cpu_arch = .thumb,
             .os_tag = .freestanding,
             .abi = .eabihf,
-            .cpu_model = std.zig.CrossTarget.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m7 },
+            .cpu_model = std.Target.Query.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m7 },
             .cpu_features_add = std.Target.arm.featureSet(&[_]std.Target.arm.Feature{ std.Target.arm.Feature.fp_armv8d16sp, std.Target.arm.Feature.soft_float }),
         }),
     ));
@@ -233,7 +233,7 @@ test "Target Conversion" {
             .cpu_arch = .thumb,
             .os_tag = .freestanding,
             .abi = .eabihf,
-            .cpu_model = std.zig.CrossTarget.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m55 },
+            .cpu_model = std.Target.Query.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m55 },
             .cpu_features_add = std.Target.arm.featureSet(&[_]std.Target.arm.Feature{std.Target.arm.Feature.fp_armv8}),
         }),
     ));
@@ -249,7 +249,7 @@ test "Target Conversion" {
             .cpu_arch = .thumb,
             .os_tag = .freestanding,
             .abi = .eabihf,
-            .cpu_model = std.zig.CrossTarget.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m55 },
+            .cpu_model = std.Target.Query.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m55 },
             .cpu_features_add = std.Target.arm.featureSet(&[_]std.Target.arm.Feature{ std.Target.arm.Feature.fp_armv8, std.Target.arm.Feature.neon }),
         }),
     ));
@@ -258,7 +258,7 @@ test "Target Conversion" {
         .cpu_arch = .thumb,
         .os_tag = .freestanding,
         .abi = .eabihf,
-        .cpu_model = std.zig.CrossTarget.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m0 },
+        .cpu_model = std.Target.Query.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m0 },
         .cpu_features_add = std.Target.arm.featureSet(&[_]std.Target.arm.Feature{ std.Target.arm.Feature.fp_armv8, std.Target.arm.Feature.neon }),
     })));
 }
@@ -284,7 +284,7 @@ test "Valid Conversion" {
         .cpu_arch = .thumb,
         .os_tag = .freestanding,
         .abi = .eabihf,
-        .cpu_model = std.zig.CrossTarget.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m7 },
+        .cpu_model = std.Target.Query.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m7 },
         .cpu_features_add = std.Target.arm.featureSet(&[_]std.Target.arm.Feature{std.Target.arm.Feature.fp_armv8d16sp}),
     };
     const my_target: Target = .{ .cpu = gcc.cpu.@"cortex-m7", .instruction_set = .thumb, .float_abi = .hard, .fpu = gcc.fpu.@"fpv5-sp-d16" };

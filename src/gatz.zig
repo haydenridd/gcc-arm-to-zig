@@ -67,7 +67,7 @@ test "targetWithin" {
         .cpu_arch = .thumb,
         .os_tag = .freestanding,
         .abi = .eabi,
-        .cpu_model = std.zig.CrossTarget.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m4 },
+        .cpu_model = std.Target.Query.CpuModel{ .explicit = &std.Target.arm.cpu.cortex_m4 },
     });
 
     try std.testing.expect(targetWithin(zig_targeta, &.{ targeta, targetb }));
@@ -242,7 +242,7 @@ fn cmdInfo(
     if (cpu_maybe) |cpu_val| {
         try cpu_val.printInfo(stdout);
     } else {
-        inline for (@typeInfo(cpu).Struct.decls) |decl| {
+        inline for (@typeInfo(cpu).@"struct".decls) |decl| {
             try @field(cpu, decl.name).printInfo(stdout);
         }
     }

@@ -1,8 +1,8 @@
 .{
-    .name = "example",
+    .name = .example,
     .version = "0.0.0",
-    .minimum_zig_version = "0.13.0",
-
+    .minimum_zig_version = "0.14.0",
+    .fingerprint = 0x6eec9b9f7f70ee0b,
     .dependencies = .{
         .gatz = .{
             // Normally this would be:
