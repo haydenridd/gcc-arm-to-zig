@@ -107,6 +107,9 @@ pub fn build(b: *std.Build) void {
     blinky_exe.link_function_sections = true;
     blinky_exe.setLinkerScript(b.path("./STM32F750N8Hx_FLASH.ld"));
 
+    // As of Zig 0.14.0 this is important to keep from bloating the binary, needs more investigation and a potential regression :(
+    blinky_exe.root_module.sanitize_c = false;
+
     // Produce .bin file from .elf
     const bin = b.addObjCopy(blinky_exe.getEmittedBin(), .{
         .format = .bin,
