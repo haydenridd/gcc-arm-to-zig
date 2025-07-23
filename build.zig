@@ -20,7 +20,7 @@ pub const newlib = struct {
         IncompatibleCpu,
     };
 
-    fn addInternal(comptime just_includes_and_system_paths: bool, b: *std.Build, target: std.Build.ResolvedTarget, exe_or_lib: *std.Build.Step.Compile) Error!void {
+    fn addInternal(comptime just_includes_and_system_paths: bool, b: *std.Build, module: *std.Build.Module) Error!void {
         // Try to find arm-none-eabi-gcc program at a user specified path, or PATH variable if none provided
         const arm_gcc_pgm = if (b.option([]const u8, "armgcc", "Path to arm-none-eabi-gcc compiler")) |arm_gcc_path|
             b.findProgram(&.{"arm-none-eabi-gcc"}, &.{arm_gcc_path}) catch return Error.CompilerNotFound
@@ -28,6 +28,7 @@ pub const newlib = struct {
             b.findProgram(&.{"arm-none-eabi-gcc"}, &.{}) catch return Error.CompilerNotFound;
 
         // Use provided Zig target to determine specific flags to find libraries
+        const target = module.resolved_target.?;
         const gcc_target = @import("src/converter.zig").Target.fromZigTarget(target.result) catch return Error.IncompatibleCpu;
         const fpu_string = if (gcc_target.fpu) |v| b.fmt("-mfpu={s}", .{v.name}) else "";
         const float_abi_string = switch (gcc_target.float_abi) {
@@ -43,37 +44,45 @@ pub const newlib = struct {
         const gcc_arm_lib_path1 = b.fmt("{s}/../lib/gcc/arm-none-eabi/{s}/{s}", .{ gcc_arm_sysroot_path, gcc_arm_version, gcc_arm_multidir_relative_path });
         const gcc_arm_lib_path2 = b.fmt("{s}/lib/{s}", .{ gcc_arm_sysroot_path, gcc_arm_multidir_relative_path });
 
-        exe_or_lib.addLibraryPath(.{ .cwd_relative = gcc_arm_lib_path1 });
-        exe_or_lib.addLibraryPath(.{ .cwd_relative = gcc_arm_lib_path2 });
-        exe_or_lib.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/include", .{gcc_arm_sysroot_path}) });
+        module.addLibraryPath(.{ .cwd_relative = gcc_arm_lib_path1 });
+        module.addLibraryPath(.{ .cwd_relative = gcc_arm_lib_path2 });
+        module.addSystemIncludePath(.{ .cwd_relative = b.fmt("{s}/include", .{gcc_arm_sysroot_path}) });
 
         if (!just_includes_and_system_paths) {
-            exe_or_lib.linkSystemLibrary("c_nano");
-            exe_or_lib.linkSystemLibrary("m");
+            module.linkSystemLibrary("c_nano", .{
+                .needed = true,
+                .use_pkg_config = .no,
+                .preferred_link_mode = .static,
+            });
+            module.linkSystemLibrary("m", .{
+                .needed = true,
+                .use_pkg_config = .no,
+                .preferred_link_mode = .static,
+            });
 
             // Manually include C runtime objects bundled with arm-none-eabi-gcc
-            exe_or_lib.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crt0.o", .{gcc_arm_lib_path2}) });
-            exe_or_lib.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crti.o", .{gcc_arm_lib_path1}) });
-            exe_or_lib.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crtbegin.o", .{gcc_arm_lib_path1}) });
-            exe_or_lib.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crtend.o", .{gcc_arm_lib_path1}) });
-            exe_or_lib.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crtn.o", .{gcc_arm_lib_path1}) });
+            module.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crt0.o", .{gcc_arm_lib_path2}) });
+            module.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crti.o", .{gcc_arm_lib_path1}) });
+            module.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crtbegin.o", .{gcc_arm_lib_path1}) });
+            module.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crtend.o", .{gcc_arm_lib_path1}) });
+            module.addObjectFile(.{ .cwd_relative = b.fmt("{s}/crtn.o", .{gcc_arm_lib_path1}) });
         }
     }
 
     /// Finds relevant object files/include directories/static libraries from arm-none-eabi-gcc
-    /// given a target, and then adds them to the provided exe.
+    /// given a module (which contains target information), and then adds them to the provided module.
     ///
     /// TODO: Add user options to choose which flavor of newlib is linked in (normal vs nano)
-    pub fn addTo(b: *std.Build, target: std.Build.ResolvedTarget, exe_or_lib: *std.Build.Step.Compile) Error!void {
-        return addInternal(false, b, target, exe_or_lib);
+    pub fn addTo(b: *std.Build, module: *std.Build.Module) Error!void {
+        return addInternal(false, b, module);
     }
 
     /// Includes system search paths and header paths from newlib.
     /// This is a workaround to the following issue, so ideally in the future this will be unneccessary:
     /// - https://github.com/ziglang/zig/issues/20431
     ///
-    pub fn addIncludeHeadersAndSystemPathsTo(b: *std.Build, target: std.Build.ResolvedTarget, exe_or_lib: *std.Build.Step.Compile) Error!void {
-        return addInternal(true, b, target, exe_or_lib);
+    pub fn addIncludeHeadersAndSystemPathsTo(b: *std.Build, module: *std.Build.Module) Error!void {
+        return addInternal(true, b, module);
     }
 };
 

@@ -40,19 +40,24 @@ pub fn build(b: *std.Build) void {
 
     const executable_name = "blinky";
 
-    const blinky_exe = b.addExecutable(.{
-        .name = executable_name ++ ".elf",
+    const blinky_mod = b.addModule(executable_name, .{
         .target = target,
         .optimize = optimize,
         .link_libc = false,
-        .linkage = .static,
         .single_threaded = true,
+        .sanitize_c = false, // Currently important if including any C files b/c of https://github.com/ziglang/zig/issues/23052, otherwise binary can get bloated
+    });
+
+    const blinky_exe = b.addExecutable(.{
+        .name = executable_name ++ ".elf",
+        .root_module = blinky_mod,
+        .linkage = .static,
     });
 
     // Linking in the arm-none-eabi-gcc supplied newlib is now a single function call!
     // Automatically grabs the correct pre-built libraries based on target. Will also
     // check to make sure a compatible target is being used
-    gatz.newlib.addTo(b, target, blinky_exe) catch |err| switch (err) {
+    gatz.newlib.addTo(b, blinky_mod) catch |err| switch (err) {
         NewlibError.CompilerNotFound => {
             std.log.err("Couldn't find arm-none-eabi-gcc compiler!\n", .{});
             unreachable;
@@ -64,17 +69,17 @@ pub fn build(b: *std.Build) void {
     };
 
     // Normal Include Paths
-    blinky_exe.addIncludePath(b.path("Core/Inc"));
-    blinky_exe.addIncludePath(b.path("Drivers/STM32F7xx_HAL_Driver/Inc"));
-    blinky_exe.addIncludePath(b.path("Drivers/STM32F7xx_HAL_Driver/Inc/Legacy"));
-    blinky_exe.addIncludePath(b.path("Drivers/CMSIS/Device/ST/STM32F7xx/Include"));
-    blinky_exe.addIncludePath(b.path("Drivers/CMSIS/Include"));
+    blinky_mod.addIncludePath(b.path("Core/Inc"));
+    blinky_mod.addIncludePath(b.path("Drivers/STM32F7xx_HAL_Driver/Inc"));
+    blinky_mod.addIncludePath(b.path("Drivers/STM32F7xx_HAL_Driver/Inc/Legacy"));
+    blinky_mod.addIncludePath(b.path("Drivers/CMSIS/Device/ST/STM32F7xx/Include"));
+    blinky_mod.addIncludePath(b.path("Drivers/CMSIS/Include"));
 
     // Startup file
-    blinky_exe.addAssemblyFile(b.path("startup_stm32f750xx.s"));
+    blinky_mod.addAssemblyFile(b.path("startup_stm32f750xx.s"));
 
     // Source files
-    blinky_exe.addCSourceFiles(.{
+    blinky_mod.addCSourceFiles(.{
         .files = &.{
             "Core/Src/main.c",
             "Core/Src/gpio.c",
@@ -106,9 +111,6 @@ pub fn build(b: *std.Build) void {
     blinky_exe.link_data_sections = true;
     blinky_exe.link_function_sections = true;
     blinky_exe.setLinkerScript(b.path("./STM32F750N8Hx_FLASH.ld"));
-
-    // As of Zig 0.14.0 this is important to keep from bloating the binary, needs more investigation and a potential regression :(
-    blinky_exe.root_module.sanitize_c = false;
 
     // Produce .bin file from .elf
     const bin = b.addObjCopy(blinky_exe.getEmittedBin(), .{
