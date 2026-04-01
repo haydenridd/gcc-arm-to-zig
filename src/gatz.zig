@@ -18,8 +18,10 @@ test "gatz" {
 }
 
 fn showHelp() anyerror!void {
-    var stdout_buffered = std.io.bufferedWriter(std.io.getStdOut().writer());
-    const stdout = stdout_buffered.writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+
     try stdout.writeAll("Usage: ");
     try stdout.writeAll(program_name);
     try stdout.writeAll(
@@ -28,7 +30,7 @@ fn showHelp() anyerror!void {
     );
     for (sub_commands) |sub_command|
         try sub_command.help(stdout);
-    try stdout_buffered.flush();
+    try stdout.flush();
 }
 
 /// Check that the Zig target is supported by gatz
@@ -112,18 +114,22 @@ const SubCommand = struct {
     }
 
     fn usageOut(sub_command: SubCommand, p: []const clap.Param(clap.Help)) !void {
-        var stdout_buffered = std.io.bufferedWriter(std.io.getStdOut().writer());
-        try sub_command.usage(stdout_buffered.writer(), p);
-        try stdout_buffered.flush();
+        var stdout_buffer: [1024]u8 = undefined;
+        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        const stdout = &stdout_writer.interface;
+        try sub_command.usage(stdout, p);
+        try stdout.flush();
     }
 
     fn usageErr(sub_command: SubCommand, p: []const clap.Param(clap.Help), prepend_msg: []const u8) !void {
-        var stderr_buffered = std.io.bufferedWriter(std.io.getStdErr().writer());
+        var stderr_buffer: [1024]u8 = undefined;
+        var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+        const stderr = &stderr_writer.interface;
         if (prepend_msg.len > 0) {
-            _ = try stderr_buffered.write(prepend_msg);
+            _ = try stderr.write(prepend_msg);
         }
-        try sub_command.usage(stderr_buffered.writer(), p);
-        try stderr_buffered.flush();
+        try sub_command.usage(stderr, p);
+        try stderr.flush();
     }
 
     fn usage(sub_command: SubCommand, stream: anytype, p: []const clap.Param(clap.Help)) !void {
@@ -146,6 +152,10 @@ fn cmdTranslate(
     allocator: std.mem.Allocator,
     args_iter: *std.process.ArgIterator,
 ) anyerror!void {
+    var stderr_buffer: [1024]u8 = undefined;
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    const stderr = &stderr_writer.interface;
+
     const params = comptime clap.parseParamsComptime(
         \\-h, --help              Display this help and exit.
         \\--mcpu <str>            GCC cpu target flag         (Required)
@@ -161,7 +171,7 @@ fn cmdTranslate(
         .diagnostic = &diag,
         .allocator = allocator,
     }) catch |err| {
-        diag.report(std.io.getStdErr().writer(), err) catch {};
+        diag.report(stderr, err) catch {};
         return err;
     };
     defer parsed.deinit();
@@ -169,25 +179,23 @@ fn cmdTranslate(
     if (parsed.args.help != 0)
         return sub_command.usageOut(&params);
 
-    var stderr_buffered = std.io.bufferedWriter(std.io.getStdErr().writer());
-    const stderr = stderr_buffered.writer();
     const FlagTranslationError = errors.FlagTranslationError;
     const target = Target.fromFlags(parsed.args.mcpu, parsed.args.@"mfloat-abi", parsed.args.mfpu, parsed.args.mthumb > 0, parsed.args.marm > 0) catch |err| switch (err) {
         FlagTranslationError.MissingCpu => return sub_command.usageErr(&params, "--mcpu argument required\n"),
         FlagTranslationError.InvalidCpu => {
             try stderr.print("--mcpu={?s} is not a valid CPU, see info command for valid CPUs\n", .{parsed.args.mcpu});
-            try stderr_buffered.flush();
+            try stderr.flush();
             return;
         },
         FlagTranslationError.InvalidFloatAbi => {
             try stderr.print("--mfloat-abi={?s} is not a valid float abi, valid options are \"hard\", \"softfp\", and \"soft\"\n", .{parsed.args.@"mfloat-abi"});
-            try stderr_buffered.flush();
+            try stderr.flush();
             return;
         },
         FlagTranslationError.MissingFpu => return sub_command.usageErr(&params, "--mfpu is required if --mfloat-abi!=soft\n"),
         FlagTranslationError.InvalidFpu => {
             try stderr.print("--mfpu={?s} is not a valid FPU, see info command for valid FPUs\n", .{parsed.args.mfpu});
-            try stderr_buffered.flush();
+            try stderr.flush();
             return;
         },
     };
@@ -198,10 +206,11 @@ fn cmdTranslate(
     const zig_cpu_str = try query.serializeCpuAlloc(allocator);
     defer allocator.free(zig_cpu_str);
 
-    var stdout_buffered = std.io.bufferedWriter(std.io.getStdOut().writer());
-    const stdout = stdout_buffered.writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
     try stdout.print("Translated `zig build` options: -Dtarget={s} -Dcpu={s}\n", .{ zig_triple, zig_cpu_str });
-    try stdout_buffered.flush();
+    try stdout.flush();
 }
 
 fn cmdInfo(
@@ -215,12 +224,16 @@ fn cmdInfo(
         \\
     );
 
+    var stderr_buffer: [1024]u8 = undefined;
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    const stderr = &stderr_writer.interface;
+
     var diag = clap.Diagnostic{};
     var parsed = clap.parseEx(clap.Help, &params, clap.parsers.default, args_iter, .{
         .diagnostic = &diag,
         .allocator = allocator,
     }) catch |err| {
-        diag.report(std.io.getStdErr().writer(), err) catch {};
+        diag.report(stderr, err) catch {};
         return err;
     };
     defer parsed.deinit();
@@ -228,16 +241,15 @@ fn cmdInfo(
     if (parsed.args.help != 0)
         return sub_command.usageOut(&params);
 
-    var stderr_buffered = std.io.bufferedWriter(std.io.getStdErr().writer());
-    const stderr = stderr_buffered.writer();
     const cpu_maybe: ?Cpu = if (parsed.args.mcpu) |mcpu_str| Cpu.fromString(mcpu_str) catch {
         try stderr.print("--mcpu={?s} is not a valid CPU, see info command for valid CPUs\n", .{parsed.args.mcpu});
-        try stderr_buffered.flush();
+        try stderr.flush();
         return;
     } else null;
 
-    var stdout_buffered = std.io.bufferedWriter(std.io.getStdOut().writer());
-    const stdout = stdout_buffered.writer();
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
 
     if (cpu_maybe) |cpu_val| {
         try cpu_val.printInfo(stdout);
@@ -246,7 +258,7 @@ fn cmdInfo(
             try @field(cpu, decl.name).printInfo(stdout);
         }
     }
-    try stdout_buffered.flush();
+    try stdout.flush();
 }
 
 const sub_commands = [_]SubCommand{
