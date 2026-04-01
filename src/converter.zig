@@ -25,16 +25,18 @@ pub const Target = struct {
     fn toArmFeatureSet(self: Target) ConversionError!std.Target.Cpu.Feature.Set {
 
         // Currently space for 16 features is plenty
-        var cpu_features = std.BoundedArray(std.Target.arm.Feature, 16).init(0) catch unreachable;
+        // var cpu_features = std.BoundedArray(std.Target.arm.Feature, 16).init(0) catch unreachable;
+        var features_list: [16]std.Target.arm.Feature = undefined;
+        var cpu_features = std.ArrayList(std.Target.arm.Feature).initBuffer(&features_list);
 
         if (self.float_abi == .softfp)
-            cpu_features.append(std.Target.arm.Feature.soft_float) catch return ConversionError.FeatureOverflow;
+            cpu_features.appendBounded(std.Target.arm.Feature.soft_float) catch return ConversionError.FeatureOverflow;
 
         if (self.fpu) |fpu| {
-            cpu_features.appendSlice(fpu.zig_features) catch return ConversionError.FeatureOverflow;
+            cpu_features.appendSliceBounded(fpu.zig_features) catch return ConversionError.FeatureOverflow;
         }
 
-        return std.Target.arm.featureSet(cpu_features.slice());
+        return std.Target.arm.featureSet(cpu_features.items);
     }
 
     fn validateFpuSettings(self: Target) ConversionError!void {
