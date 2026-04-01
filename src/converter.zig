@@ -290,7 +290,7 @@ test "Valid Conversion" {
         .cpu_features_add = std.Target.arm.featureSet(&[_]std.Target.arm.Feature{std.Target.arm.Feature.fp_armv8d16sp}),
     };
     const my_target: Target = .{ .cpu = gcc.cpu.@"cortex-m7", .instruction_set = .thumb, .float_abi = .hard, .fpu = gcc.fpu.@"fpv5-sp-d16" };
-    try std.testing.expectEqualDeep(some_query, try my_target.toTargetQuery());
+    try std.testing.expectEqual(some_query, try my_target.toTargetQuery());
 }
 
 test "Invalid Conversion" {
