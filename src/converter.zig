@@ -25,7 +25,6 @@ pub const Target = struct {
     fn toArmFeatureSet(self: Target) ConversionError!std.Target.Cpu.Feature.Set {
 
         // Currently space for 16 features is plenty
-        // var cpu_features = std.BoundedArray(std.Target.arm.Feature, 16).init(0) catch unreachable;
         var features_list: [16]std.Target.arm.Feature = undefined;
         var cpu_features = std.ArrayList(std.Target.arm.Feature).initBuffer(&features_list);
 
