@@ -45,7 +45,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = false,
         .single_threaded = true,
-        .sanitize_c = false, // Currently important if including any C files b/c of https://github.com/ziglang/zig/issues/23052, otherwise binary can get bloated
+        .sanitize_c = .off, // Currently important if including any C files b/c of https://github.com/ziglang/zig/issues/23052, otherwise binary can get bloated
     });
 
     const blinky_exe = b.addExecutable(.{
