@@ -17,9 +17,9 @@ test "gatz" {
     testing.refAllDecls(@This());
 }
 
-fn showHelp() anyerror!void {
+fn showHelp(io: std.Io) anyerror!void {
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
 
     try stdout.writeAll("Usage: ");
@@ -64,8 +64,8 @@ test "targetWithin" {
         .fpu = null,
     };
 
-    const zig_targeta = try std.zig.system.resolveTargetQuery(try targeta.toTargetQuery());
-    const zig_targetb = try std.zig.system.resolveTargetQuery(.{
+    const zig_targeta = try std.zig.system.resolveTargetQuery(std.testing.io, try targeta.toTargetQuery());
+    const zig_targetb = try std.zig.system.resolveTargetQuery(std.testing.io, .{
         .cpu_arch = .thumb,
         .os_tag = .freestanding,
         .abi = .eabi,
@@ -76,32 +76,29 @@ test "targetWithin" {
     try std.testing.expect(!targetWithin(zig_targetb, &.{ targeta, targetb }));
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
-    // Grab top level command
-    var args_iter = try std.process.argsWithAllocator(allocator);
+    var args_iter = try init.minimal.args.iterateAllocator(allocator);
     defer args_iter.deinit();
     _ = args_iter.next();
 
     const command_str = args_iter.next() orelse "help";
     for (sub_commands) |sub_command| {
         if (std.mem.eql(u8, command_str, sub_command.name)) {
-            try sub_command.func(sub_command, allocator, &args_iter);
+            try sub_command.func(sub_command, allocator, &args_iter, init.io);
             return;
         }
     }
 
-    return showHelp();
+    return showHelp(init.io);
 }
 
 const program_name = "gatz";
 
 const SubCommand = struct {
     name: []const u8,
-    func: *const fn (SubCommand, std.mem.Allocator, *std.process.ArgIterator) anyerror!void,
+    func: *const fn (SubCommand, std.mem.Allocator, *std.process.Args.Iterator, std.Io) anyerror!void,
     description: []const u8,
 
     fn help(sub_command: SubCommand, writer: anytype) !void {
@@ -113,17 +110,17 @@ const SubCommand = struct {
         try writer.writeAll("\n");
     }
 
-    fn usageOut(sub_command: SubCommand, p: []const clap.Param(clap.Help)) !void {
+    fn usageOut(sub_command: SubCommand, p: []const clap.Param(clap.Help), io: std.Io) !void {
         var stdout_buffer: [1024]u8 = undefined;
-        var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+        var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
         const stdout = &stdout_writer.interface;
         try sub_command.usage(stdout, p);
         try stdout.flush();
     }
 
-    fn usageErr(sub_command: SubCommand, p: []const clap.Param(clap.Help), prepend_msg: []const u8) !void {
+    fn usageErr(sub_command: SubCommand, p: []const clap.Param(clap.Help), prepend_msg: []const u8, io: std.Io) !void {
         var stderr_buffer: [1024]u8 = undefined;
-        var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+        var stderr_writer = std.Io.File.stderr().writer(io, &stderr_buffer);
         const stderr = &stderr_writer.interface;
         if (prepend_msg.len > 0) {
             _ = try stderr.write(prepend_msg);
@@ -150,10 +147,11 @@ const SubCommand = struct {
 fn cmdTranslate(
     sub_command: SubCommand,
     allocator: std.mem.Allocator,
-    args_iter: *std.process.ArgIterator,
+    args_iter: *std.process.Args.Iterator,
+    io: std.Io,
 ) anyerror!void {
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    var stderr_writer = std.Io.File.stderr().writer(io, &stderr_buffer);
     const stderr = &stderr_writer.interface;
 
     const params = comptime clap.parseParamsComptime(
@@ -177,11 +175,11 @@ fn cmdTranslate(
     defer parsed.deinit();
 
     if (parsed.args.help != 0)
-        return sub_command.usageOut(&params);
+        return sub_command.usageOut(&params, io);
 
     const FlagTranslationError = errors.FlagTranslationError;
     const target = Target.fromFlags(parsed.args.mcpu, parsed.args.@"mfloat-abi", parsed.args.mfpu, parsed.args.mthumb > 0, parsed.args.marm > 0) catch |err| switch (err) {
-        FlagTranslationError.MissingCpu => return sub_command.usageErr(&params, "--mcpu argument required\n"),
+        FlagTranslationError.MissingCpu => return sub_command.usageErr(&params, "--mcpu argument required\n", io),
         FlagTranslationError.InvalidCpu => {
             try stderr.print("--mcpu={?s} is not a valid CPU, see info command for valid CPUs\n", .{parsed.args.mcpu});
             try stderr.flush();
@@ -192,7 +190,7 @@ fn cmdTranslate(
             try stderr.flush();
             return;
         },
-        FlagTranslationError.MissingFpu => return sub_command.usageErr(&params, "--mfpu is required if --mfloat-abi!=soft\n"),
+        FlagTranslationError.MissingFpu => return sub_command.usageErr(&params, "--mfpu is required if --mfloat-abi!=soft\n", io),
         FlagTranslationError.InvalidFpu => {
             try stderr.print("--mfpu={?s} is not a valid FPU, see info command for valid FPUs\n", .{parsed.args.mfpu});
             try stderr.flush();
@@ -207,7 +205,7 @@ fn cmdTranslate(
     defer allocator.free(zig_cpu_str);
 
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
     try stdout.print("Translated `zig build` options: -Dtarget={s} -Dcpu={s}\n", .{ zig_triple, zig_cpu_str });
     try stdout.flush();
@@ -216,7 +214,8 @@ fn cmdTranslate(
 fn cmdInfo(
     sub_command: SubCommand,
     allocator: std.mem.Allocator,
-    args_iter: *std.process.ArgIterator,
+    args_iter: *std.process.Args.Iterator,
+    io: std.Io,
 ) anyerror!void {
     const params = comptime clap.parseParamsComptime(
         \\-h, --help              Display this help and exit.
@@ -225,7 +224,7 @@ fn cmdInfo(
     );
 
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    var stderr_writer = std.Io.File.stderr().writer(io, &stderr_buffer);
     const stderr = &stderr_writer.interface;
 
     var diag = clap.Diagnostic{};
@@ -239,7 +238,7 @@ fn cmdInfo(
     defer parsed.deinit();
 
     if (parsed.args.help != 0)
-        return sub_command.usageOut(&params);
+        return sub_command.usageOut(&params, io);
 
     const cpu_maybe: ?Cpu = if (parsed.args.mcpu) |mcpu_str| Cpu.fromString(mcpu_str) catch {
         try stderr.print("--mcpu={?s} is not a valid CPU, see info command for valid CPUs\n", .{parsed.args.mcpu});
@@ -248,7 +247,7 @@ fn cmdInfo(
     } else null;
 
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
 
     if (cpu_maybe) |cpu_val| {

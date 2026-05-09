@@ -198,7 +198,7 @@ test "Target Conversion" {
         .instruction_set = .thumb,
         .fpu = gcc.fpu.@"fpv5-sp-d16",
     }, try Target.fromZigTarget(
-        try std.zig.system.resolveTargetQuery(.{
+        try std.zig.system.resolveTargetQuery(std.testing.io, .{
             .cpu_arch = .thumb,
             .os_tag = .freestanding,
             .abi = .eabihf,
@@ -214,7 +214,7 @@ test "Target Conversion" {
         .instruction_set = .thumb,
         .fpu = gcc.fpu.@"fpv5-sp-d16",
     }, try Target.fromZigTarget(
-        try std.zig.system.resolveTargetQuery(.{
+        try std.zig.system.resolveTargetQuery(std.testing.io, .{
             .cpu_arch = .thumb,
             .os_tag = .freestanding,
             .abi = .eabihf,
@@ -230,7 +230,7 @@ test "Target Conversion" {
         .instruction_set = .thumb,
         .fpu = gcc.fpu.@"fp-armv8",
     }, try Target.fromZigTarget(
-        try std.zig.system.resolveTargetQuery(.{
+        try std.zig.system.resolveTargetQuery(std.testing.io, .{
             .cpu_arch = .thumb,
             .os_tag = .freestanding,
             .abi = .eabihf,
@@ -246,7 +246,7 @@ test "Target Conversion" {
         .instruction_set = .thumb,
         .fpu = gcc.fpu.@"neon-fp-armv8",
     }, try Target.fromZigTarget(
-        try std.zig.system.resolveTargetQuery(.{
+        try std.zig.system.resolveTargetQuery(std.testing.io, .{
             .cpu_arch = .thumb,
             .os_tag = .freestanding,
             .abi = .eabihf,
@@ -255,7 +255,7 @@ test "Target Conversion" {
         }),
     ));
 
-    try std.testing.expectError(ConversionError.IncompatibleFpuForCpu, Target.fromZigTarget(try std.zig.system.resolveTargetQuery(.{
+    try std.testing.expectError(ConversionError.IncompatibleFpuForCpu, Target.fromZigTarget(try std.zig.system.resolveTargetQuery(std.testing.io, .{
         .cpu_arch = .thumb,
         .os_tag = .freestanding,
         .abi = .eabihf,

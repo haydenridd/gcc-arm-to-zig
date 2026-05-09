@@ -144,7 +144,7 @@ test "Cpu from Zig Target" {
             if (@field(std.Target.arm.cpu, zig_decl.name).llvm_name) |llvm_name| {
                 if (std.mem.eql(u8, decl.name, llvm_name)) {
                     query.cpu_model = std.Target.Query.CpuModel{ .explicit = &@field(std.Target.arm.cpu, zig_decl.name) };
-                    const target = try std.zig.system.resolveTargetQuery(query);
+                    const target = try std.zig.system.resolveTargetQuery(std.testing.io, query);
                     try std.testing.expectEqualDeep(@field(cpu, decl.name), Cpu.fromZigTarget(target));
                 }
             }
