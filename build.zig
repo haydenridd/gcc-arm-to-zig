@@ -22,10 +22,12 @@ pub const newlib = struct {
 
     fn addInternal(comptime just_includes_and_system_paths: bool, b: *std.Build, module: *std.Build.Module) Error!void {
         // Try to find arm-none-eabi-gcc program at a user specified path, or PATH variable if none provided
-        const arm_gcc_pgm = if (b.option([]const u8, "armgcc", "Path to arm-none-eabi-gcc compiler")) |arm_gcc_path|
-            b.findProgram(&.{"arm-none-eabi-gcc"}, &.{arm_gcc_path}) catch return Error.CompilerNotFound
-        else
-            b.findProgram(&.{"arm-none-eabi-gcc"}, &.{}) catch return Error.CompilerNotFound;
+        if (b.option([]const u8, "armgcc", "Path to arm-none-eabi-gcc compiler")) |arm_gcc_path| {
+            b.addSearchPrefix(arm_gcc_path);
+        }
+
+        const arm_gcc_pgm =
+            b.findProgram(.{ .names = &.{"arm-none-eabi-gcc"} }) orelse return Error.CompilerNotFound;
 
         // Use provided Zig target to determine specific flags to find libraries
         const target = module.resolved_target.?;

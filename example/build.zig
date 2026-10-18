@@ -114,7 +114,7 @@ pub fn build(b: *std.Build) void {
 
     // Produce .bin file from .elf
     const bin = b.addObjCopy(blinky_exe.getEmittedBin(), .{
-        .format = .bin,
+        .format = .binary,
     });
     bin.step.dependOn(&blinky_exe.step);
     const copy_bin = b.addInstallBinFile(bin.getOutput(), executable_name ++ ".bin");
