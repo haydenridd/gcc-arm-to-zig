@@ -128,9 +128,9 @@ pub const Target = struct {
 
         // Iterate through all FPUs, if it contains all required feautures, pick that one
         var fpu: ?gcc.Fpu = null;
-        inline for (@typeInfo(gcc.fpu).@"struct".decls) |decl| {
+        inline for (@typeInfo(gcc.fpu).@"struct".decl_names) |decl| {
             var valid = true;
-            for (@field(gcc.fpu, decl.name).zig_features) |feature| {
+            for (@field(gcc.fpu, decl).zig_features) |feature| {
                 if (!std.Target.arm.featureSetHas(target.cpu.features, feature)) {
                     valid = false;
                     break;
@@ -138,13 +138,13 @@ pub const Target = struct {
             }
             if (valid) {
                 if (fpu) |v| {
-                    const tmp_fpu = @field(gcc.fpu, decl.name);
+                    const tmp_fpu = @field(gcc.fpu, decl);
                     // Priority system makes sure fpus that are a subset of other fpus aren't mistakenly chosen
                     if (tmp_fpu.priority < v.priority) {
                         fpu = tmp_fpu;
                     }
                 } else {
-                    fpu = @field(gcc.fpu, decl.name);
+                    fpu = @field(gcc.fpu, decl);
                 }
             }
         }

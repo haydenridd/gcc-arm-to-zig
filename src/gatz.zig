@@ -17,20 +17,28 @@ test "gatz" {
     testing.refAllDecls(@This());
 }
 
-fn showHelp(io: std.Io) anyerror!void {
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
-    const stdout = &stdout_writer.interface;
-
-    try stdout.writeAll("Usage: ");
-    try stdout.writeAll(program_name);
-    try stdout.writeAll(
-        \\ [command] [args]...
+fn showUsage(writer: *std.Io.Writer) anyerror!void {
+    const usage =
+        \\Usage:
+        \\  gatz [-v] [-h] <command>
+        \\Options:
+        \\  -h            Show help
+        \\  -v            Show version
+        \\Available Commands:
+        \\  translate [gcc args]  - Validate and translate GCC arm target arguments to a Zig target argument
+        \\    Supported args:
+        \\      -mcpu=<str>            GCC cpu target flag                                       (Required)
+        \\      -mfloat-abi=<str>      "hard", "softfp", or "soft"                               (Optional - default "soft")
+        \\      -mfpu=<str>            GCC floating point ISA flag                               (Required with "hard" or "softfp")
+        \\      -mthumb                Use thumb instruction set, mutually exclusive with -marm  (Optional - default enabled)
+        \\      -marm                  Use arm instruction set                                   (Optional - default disabled)
+        \\  info [options]        - Show possible compile options for valid targets (defaults to all targets)
+        \\    Options:
+        \\      -mcpu=<str>            Filters to only one cpu target (Optional)
         \\
-    );
-    for (sub_commands) |sub_command|
-        try sub_command.help(stdout);
-    try stdout.flush();
+    ;
+    try writer.writeAll(usage);
+    try writer.flush();
 }
 
 /// Check that the Zig target is supported by gatz
@@ -76,191 +84,225 @@ test "targetWithin" {
     try std.testing.expect(!targetWithin(zig_targetb, &.{ targeta, targetb }));
 }
 
-pub fn main(init: std.process.Init) !void {
-    const allocator = init.gpa;
+const ParsedArgs = union(enum) {
+    help,
+    version,
+    command: Command,
 
-    var args_iter = try init.minimal.args.iterateAllocator(allocator);
-    defer args_iter.deinit();
-    _ = args_iter.next();
+    pub fn parse(args: []const []const u8, stderr: *std.Io.Writer) !ParsedArgs {
+        var i: usize = 0;
+        while (i < args.len) {
+            if (std.mem.eql(u8, args[i], "-v")) {
+                return .version;
+            } else if (std.mem.eql(u8, args[i], "-h")) {
+                return .help;
+            } else {
+                return .{
+                    .command = try Command.parse(args[i..], stderr),
+                };
+            }
+            i += 1;
+        }
+        return .help;
+    }
+};
 
-    const command_str = args_iter.next() orelse "help";
-    for (sub_commands) |sub_command| {
-        if (std.mem.eql(u8, command_str, sub_command.name)) {
-            try sub_command.func(sub_command, allocator, &args_iter, init.io);
-            return;
+const Command = union(enum) {
+    translate: Translate,
+    info: Info,
+
+    pub fn parse(args: []const []const u8, stderr: *std.Io.Writer) !Command {
+        var i: usize = 0;
+        while (i < args.len) {
+            if (std.mem.eql(u8, args[i], "translate")) {
+                return .{
+                    .translate = try Translate.parse(args[i + 1 ..], stderr),
+                };
+            } else if (std.mem.eql(u8, args[i], "info")) {
+                return .{
+                    .info = try Info.parse(args[i + 1 ..], stderr),
+                };
+            } else {
+                try stderr.print("Invalid command: {s}\n", .{args[i]});
+                try stderr.flush();
+                return error.UnknownCommand;
+            }
+            i += 1;
+        }
+        try stderr.print("No valid command in args\n", .{});
+        try stderr.flush();
+        return error.UnknownCommand;
+    }
+};
+
+const Translate = struct {
+    mcpu: []const u8,
+    @"mfloat-abi": ?[]const u8 = null,
+    mfpu: ?[]const u8 = null,
+    mthumb: bool = false,
+    marm: bool = false,
+
+    pub fn parse(args: []const []const u8, stderr: *std.Io.Writer) !Translate {
+        var i: usize = 0;
+
+        var cpu_maybe: ?[]const u8 = null;
+        var ret: Translate = .{ .mcpu = "" };
+        const mcpu_delim = "-mcpu=";
+        const mfpu_delim = "-mfpu=";
+        const mfloat_abi_delim = "-mfloat-abi=";
+        while (i < args.len) {
+            if (std.mem.eql(u8, args[i], "-marm")) {
+                ret.marm = true;
+            } else if (std.mem.eql(u8, args[i], "-mthumb")) {
+                ret.mthumb = true;
+            } else if (std.mem.find(u8, args[i], mcpu_delim)) |idx| {
+                if (idx != 0) {
+                    try stderr.print("Malformed -mcpu argument: {s}\n", .{args[i]});
+                    try stderr.flush();
+                    return error.UnknownCommand;
+                }
+                cpu_maybe = args[i][mcpu_delim.len..];
+            } else if (std.mem.find(u8, args[i], mfpu_delim)) |idx| {
+                if (idx != 0) {
+                    try stderr.print("Malformed -mfpu argument: {s}\n", .{args[i]});
+                    try stderr.flush();
+                    return error.UnknownCommand;
+                }
+                ret.mfpu = args[i][mfpu_delim.len..];
+            } else if (std.mem.find(u8, args[i], mfloat_abi_delim)) |idx| {
+                if (idx != 0) {
+                    try stderr.print("Malformed -mfloat-abi argument: {s}\n", .{args[i]});
+                    try stderr.flush();
+                    return error.UnknownCommand;
+                }
+                ret.@"mfloat-abi" = args[i][mfloat_abi_delim.len..];
+            } else {
+                try stderr.print("Unknown flag argument: {s}\n", .{args[i]});
+                try stderr.flush();
+                return error.UnknownCommand;
+            }
+            i += 1;
+        }
+        if (cpu_maybe) |mcpu| {
+            ret.mcpu = mcpu;
+            return ret;
+        } else {
+            try stderr.print("-mcpu flag not provided\n", .{});
+            try stderr.flush();
+            return error.MissingCpu;
         }
     }
 
-    return showHelp(init.io);
-}
-
-const program_name = "gatz";
-
-const SubCommand = struct {
-    name: []const u8,
-    func: *const fn (SubCommand, std.mem.Allocator, *std.process.Args.Iterator, std.Io) anyerror!void,
-    description: []const u8,
-
-    fn help(sub_command: SubCommand, writer: anytype) !void {
-        const spaces = " " ** 20;
-        try writer.writeAll("    ");
-        try writer.writeAll(sub_command.name);
-        try writer.writeAll(spaces[sub_command.name.len..]);
-        try writer.writeAll(sub_command.description);
-        try writer.writeAll("\n");
-    }
-
-    fn usageOut(sub_command: SubCommand, p: []const clap.Param(clap.Help), io: std.Io) !void {
-        var stdout_buffer: [1024]u8 = undefined;
-        var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
-        const stdout = &stdout_writer.interface;
-        try sub_command.usage(stdout, p);
+    pub fn run(translate: Translate, arena: std.mem.Allocator, stdout: *std.Io.Writer, stderr: *std.Io.Writer) !void {
+        const FlagTranslationError = errors.FlagTranslationError;
+        const target = Target.fromFlags(translate.mcpu, translate.@"mfloat-abi", translate.mfpu, translate.mthumb, translate.marm) catch |err| switch (err) {
+            FlagTranslationError.MissingCpu => {
+                try stderr.print("-mcpu argument required\n", .{});
+                try stderr.flush();
+                return;
+            },
+            FlagTranslationError.InvalidCpu => {
+                try stderr.print("-mcpu={s} is not a valid CPU, see info command for valid CPUs\n", .{translate.mcpu});
+                try stderr.flush();
+                return;
+            },
+            FlagTranslationError.InvalidFloatAbi => {
+                try stderr.print("-mfloat-abi={?s} is not a valid float abi, valid options are \"hard\", \"softfp\", and \"soft\"\n", .{translate.@"mfloat-abi"});
+                try stderr.flush();
+                return;
+            },
+            FlagTranslationError.MissingFpu => {
+                try stderr.writeAll("-mfpu is required if --mfloat-abi!=soft\n");
+                try stderr.flush();
+                return;
+            },
+            FlagTranslationError.InvalidFpu => {
+                try stderr.print("-mfpu={?s} is not a valid FPU, see info command for valid FPUs\n", .{translate.mfpu});
+                try stderr.flush();
+                return;
+            },
+        };
+        const query = try target.toTargetQuery();
+        const zig_triple = try query.zigTriple(arena);
+        const zig_cpu_str = try query.serializeCpuAlloc(arena);
+        try stdout.print("Translated `zig build` options: -Dtarget={s} -Dcpu={s}\n", .{ zig_triple, zig_cpu_str });
         try stdout.flush();
     }
+};
 
-    fn usageErr(sub_command: SubCommand, p: []const clap.Param(clap.Help), prepend_msg: []const u8, io: std.Io) !void {
-        var stderr_buffer: [1024]u8 = undefined;
-        var stderr_writer = std.Io.File.stderr().writer(io, &stderr_buffer);
-        const stderr = &stderr_writer.interface;
-        if (prepend_msg.len > 0) {
-            _ = try stderr.write(prepend_msg);
+const Info = struct {
+    mcpu: ?[]const u8 = null,
+
+    pub fn parse(args: []const []const u8, stderr: *std.Io.Writer) !Info {
+        var i: usize = 0;
+
+        var ret: Info = .{};
+        const mcpu_delim = "-mcpu=";
+        while (i < args.len) {
+            if (std.mem.find(u8, args[i], mcpu_delim)) |idx| {
+                if (idx != 0) {
+                    try stderr.print("Malformed -mcpu argument: {s}\n", .{args[i]});
+                    try stderr.flush();
+                    return error.UnknownCommand;
+                }
+                ret.mcpu = args[i][mcpu_delim.len..];
+            } else {
+                try stderr.print("Unknown flag argument: {s}\n", .{args[i]});
+                try stderr.flush();
+                return error.UnknownCommand;
+            }
+            i += 1;
         }
-        try sub_command.usage(stderr, p);
-        try stderr.flush();
+        return ret;
     }
 
-    fn usage(sub_command: SubCommand, stream: anytype, p: []const clap.Param(clap.Help)) !void {
-        try stream.print("Usage: {s} {s} ", .{ program_name, sub_command.name });
-        try clap.usage(stream, clap.Help, p);
-        try stream.writeAll("\n\n");
-        try stream.writeAll(sub_command.description);
-        try stream.writeAll(
-            \\
-            \\
-            \\Options:
-            \\
-        );
-        try clap.help(stream, clap.Help, p, .{});
+    pub fn run(info: Info, stdout: *std.Io.Writer, stderr: *std.Io.Writer) !void {
+        const cpu_maybe: ?Cpu = if (info.mcpu) |mcpu_str| Cpu.fromString(mcpu_str) catch {
+            try stderr.print("-mcpu={s} is not a valid CPU, see info command for valid CPUs\n", .{mcpu_str});
+            try stderr.flush();
+            return;
+        } else null;
+
+        if (cpu_maybe) |cpu_val| {
+            try cpu_val.printInfo(stdout);
+        } else {
+            inline for (@typeInfo(cpu).@"struct".decl_names) |decl| {
+                try @field(cpu, decl).printInfo(stdout);
+            }
+        }
+        try stdout.flush();
     }
 };
 
-fn cmdTranslate(
-    sub_command: SubCommand,
-    allocator: std.mem.Allocator,
-    args_iter: *std.process.Args.Iterator,
-    io: std.Io,
-) anyerror!void {
-    var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = std.Io.File.stderr().writer(io, &stderr_buffer);
-    const stderr = &stderr_writer.interface;
-
-    const params = comptime clap.parseParamsComptime(
-        \\-h, --help              Display this help and exit.
-        \\--mcpu <str>            GCC cpu target flag         (Required)
-        \\--mfloat-abi <str>      "hard", "softfp", or "soft" (Optional - default "soft")
-        \\--mfpu <str>            GCC floating point ISA flag (Required with "hard" or "softfp")
-        \\--mthumb                Use thumb instruction set   (Optional - default enabled)
-        \\--marm                  Use arm instruction set     (Optional - default disabled)
-        \\
-    );
-
-    var diag = clap.Diagnostic{};
-    var parsed = clap.parseEx(clap.Help, &params, clap.parsers.default, args_iter, .{
-        .diagnostic = &diag,
-        .allocator = allocator,
-    }) catch |err| {
-        diag.report(stderr, err) catch {};
-        return err;
-    };
-    defer parsed.deinit();
-
-    if (parsed.args.help != 0)
-        return sub_command.usageOut(&params, io);
-
-    const FlagTranslationError = errors.FlagTranslationError;
-    const target = Target.fromFlags(parsed.args.mcpu, parsed.args.@"mfloat-abi", parsed.args.mfpu, parsed.args.mthumb > 0, parsed.args.marm > 0) catch |err| switch (err) {
-        FlagTranslationError.MissingCpu => return sub_command.usageErr(&params, "--mcpu argument required\n", io),
-        FlagTranslationError.InvalidCpu => {
-            try stderr.print("--mcpu={?s} is not a valid CPU, see info command for valid CPUs\n", .{parsed.args.mcpu});
-            try stderr.flush();
-            return;
-        },
-        FlagTranslationError.InvalidFloatAbi => {
-            try stderr.print("--mfloat-abi={?s} is not a valid float abi, valid options are \"hard\", \"softfp\", and \"soft\"\n", .{parsed.args.@"mfloat-abi"});
-            try stderr.flush();
-            return;
-        },
-        FlagTranslationError.MissingFpu => return sub_command.usageErr(&params, "--mfpu is required if --mfloat-abi!=soft\n", io),
-        FlagTranslationError.InvalidFpu => {
-            try stderr.print("--mfpu={?s} is not a valid FPU, see info command for valid FPUs\n", .{parsed.args.mfpu});
-            try stderr.flush();
-            return;
-        },
-    };
-    const query = try target.toTargetQuery();
-    const zig_triple = try query.zigTriple(allocator);
-    defer allocator.free(zig_triple);
-
-    const zig_cpu_str = try query.serializeCpuAlloc(allocator);
-    defer allocator.free(zig_cpu_str);
+pub fn main(init: std.process.Init) !void {
+    const arena = init.arena.allocator();
+    const args = try init.minimal.args.toSlice(arena);
+    const io = init.io;
 
     var stdout_buffer: [1024]u8 = undefined;
     var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
-    try stdout.print("Translated `zig build` options: -Dtarget={s} -Dcpu={s}\n", .{ zig_triple, zig_cpu_str });
-    try stdout.flush();
-}
-
-fn cmdInfo(
-    sub_command: SubCommand,
-    allocator: std.mem.Allocator,
-    args_iter: *std.process.Args.Iterator,
-    io: std.Io,
-) anyerror!void {
-    const params = comptime clap.parseParamsComptime(
-        \\-h, --help              Display this help and exit.
-        \\--mcpu <str>            Filters to only one cpu target (Optional)
-        \\
-    );
-
     var stderr_buffer: [1024]u8 = undefined;
     var stderr_writer = std.Io.File.stderr().writer(io, &stderr_buffer);
     const stderr = &stderr_writer.interface;
 
-    var diag = clap.Diagnostic{};
-    var parsed = clap.parseEx(clap.Help, &params, clap.parsers.default, args_iter, .{
-        .diagnostic = &diag,
-        .allocator = allocator,
-    }) catch |err| {
-        diag.report(stderr, err) catch {};
-        return err;
-    };
-    defer parsed.deinit();
-
-    if (parsed.args.help != 0)
-        return sub_command.usageOut(&params, io);
-
-    const cpu_maybe: ?Cpu = if (parsed.args.mcpu) |mcpu_str| Cpu.fromString(mcpu_str) catch {
-        try stderr.print("--mcpu={?s} is not a valid CPU, see info command for valid CPUs\n", .{parsed.args.mcpu});
-        try stderr.flush();
-        return;
-    } else null;
-
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.Io.File.stdout().writer(io, &stdout_buffer);
-    const stdout = &stdout_writer.interface;
-
-    if (cpu_maybe) |cpu_val| {
-        try cpu_val.printInfo(stdout);
-    } else {
-        inline for (@typeInfo(cpu).@"struct".decls) |decl| {
-            try @field(cpu, decl.name).printInfo(stdout);
-        }
+    const parsed = try ParsedArgs.parse(args[1..], stderr);
+    switch (parsed) {
+        .help => try showUsage(stdout),
+        .version => {
+            try stdout.print("Version: {f}\n", .{@import("options").version});
+        },
+        .command => |cmd| {
+            switch (cmd) {
+                .translate => |translate| {
+                    try translate.run(arena, stdout, stderr);
+                },
+                .info => |info| {
+                    try info.run(stdout, stderr);
+                },
+            }
+        },
     }
+    try stderr.flush();
     try stdout.flush();
 }
-
-const sub_commands = [_]SubCommand{
-    .{ .name = "translate", .func = cmdTranslate, .description = "Validate and translate GCC arm target arguments to a Zig target argument." },
-    .{ .name = "info", .func = cmdInfo, .description = "Show possible compile options for valid targets." },
-};

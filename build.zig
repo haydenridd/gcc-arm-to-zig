@@ -22,10 +22,12 @@ pub const newlib = struct {
 
     fn addInternal(comptime just_includes_and_system_paths: bool, b: *std.Build, module: *std.Build.Module) Error!void {
         // Try to find arm-none-eabi-gcc program at a user specified path, or PATH variable if none provided
-        const arm_gcc_pgm = if (b.option([]const u8, "armgcc", "Path to arm-none-eabi-gcc compiler")) |arm_gcc_path|
-            b.findProgram(&.{"arm-none-eabi-gcc"}, &.{arm_gcc_path}) catch return Error.CompilerNotFound
-        else
-            b.findProgram(&.{"arm-none-eabi-gcc"}, &.{}) catch return Error.CompilerNotFound;
+        if (b.option([]const u8, "armgcc", "Path to arm-none-eabi-gcc compiler")) |arm_gcc_path| {
+            b.addSearchPrefix(arm_gcc_path);
+        }
+
+        const arm_gcc_pgm =
+            b.findProgram(.{ .names = &.{"arm-none-eabi-gcc"} }) orelse return Error.CompilerNotFound;
 
         // Use provided Zig target to determine specific flags to find libraries
         const target = module.resolved_target.?;
@@ -90,31 +92,35 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Snag semver from build.zig.zon
+    const version_str = @import("build.zig.zon").version;
+    const version = std.SemanticVersion.parse(version_str) catch @panic("Bad version");
+    const options = b.addOptions();
+    options.addOption(std.SemanticVersion, "version", version);
+
     const exe = b.addExecutable(.{
         .name = "gatz",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/gatz.zig"),
             .target = target,
             .optimize = optimize,
+            .imports = &.{
+                .{ .module = options.createModule(), .name = "options" },
+            },
         }),
     });
-    const clap = b.dependency("clap", .{});
-    exe.root_module.addImport("clap", clap.module("clap"));
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    run_cmd.addPassthruArgs();
+
     const run_step = b.step("run", "Run the gatz CLI");
     run_step.dependOn(&run_cmd.step);
 
     const tests = b.addTest(.{
         .root_module = exe.root_module,
     });
-    tests.root_module.addImport("clap", clap.module("clap"));
-
     const run_tests = b.addRunArtifact(tests);
     const test_step = b.step("test", "Run all tests");
     test_step.dependOn(&run_tests.step);
